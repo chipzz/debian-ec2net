@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+if [ install = "$1" ]; then
+	files="/etc/sysconfig/network-scripts/ec2net.hotplug\
+		/etc/sysconfig/network-scripts/ec2net-functions\
+		/etc/udev/rules.d/53-ec2-network-interfaces.rules\
+		/etc/dhcp/dhclient-exit-hooks.d/ec2dhcp.sh"
+
+	all_exist()
+	{
+		for f; do
+			test -f "$f" || return 1
+		done
+		return 0
+	}
+
+	if all_exist $files; then
+		rm -f $files
+		rmdir /etc/sysconfig/network-scripts
+		rmdir /etc/sysconfig
+	fi
+fi

@@ -1,0 +1,12 @@
+Source: ec2net
+Maintainer: Jan Van Buggenhout <chipzz@chipzz.be>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 9)
+
+Package: ec2net
+Architecture: all
+Depends: udev, isc-dhcp-client, ifupdown, bash (>= 3.0), curl
+Description: Amazon AWS EC2 network scripts
+ Amazon AWS EC2 network scripts to manage ENIs
