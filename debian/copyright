@@ -5,6 +5,7 @@ License: Apache
 Files: ec2* 53-ec2-network-interfaces.rules
 Copyright: 2012, Amazon.com
            2013-2016, Alessandro De Maria https://github.com/ademaria
+           2016, Jan Van Buggenhout <chipzz@chipzz.be>
 License: Apache
 
 Files: ec2net-functions
@@ -12,21 +13,25 @@ Copyright: 2012, Amazon.com
            2013-2016, Alessandro De Maria https://github.com/ademaria
            2014, Jesse Collier https://github.com/jessecollier
            2015, vhyrbi https://github.com/vhyrbi
+           2016, Jan Van Buggenhout <chipzz@chipzz.be>
 License: Apache
 
 Files: ec2net.hotplug
 Copyright: 2012, Amazon.com
            2013-2016, Alessandro De Maria https://github.com/ademaria
            2014, James Coleman https://github.com/jcoleman
+           2016, Jan Van Buggenhout <chipzz@chipzz.be>
 License: Apache
 
 Files: README.md
 Copyright: 2013-2016, Alessandro De Maria https://github.com/ademaria
            2015, Jason Dusek http://github.com/solidsnack
+           2016, Jan Van Buggenhout <chipzz@chipzz.be>
 License: GPL-2
 
 Files: Makefile
 Copyright: 2015, Jason Dusek http://github.com/solidsnack
+           2016, Jan Van Buggenhout <chipzz@chipzz.be>
 License: GPL-2
 
 Files: debian/*

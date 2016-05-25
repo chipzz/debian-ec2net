@@ -1,0 +1,1 @@
+lib/ec2net/dhcp etc/dhcp/dhclient-exit-hooks.d/ec2net

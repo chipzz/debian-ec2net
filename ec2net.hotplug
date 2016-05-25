@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Copyright (C) 2012 Amazon.com, Inc. or its affiliates.
 # All Rights Reserved.
@@ -22,13 +22,13 @@ if [ ! -f /sys/class/net/eth0/operstate ] || ! grep 'up' /sys/class/net/eth0/ope
   exit
 fi
 
-. /etc/network/ec2net-functions
-
-case $ACTION in
-  add)
-    plug_interface
-    ;;
-  remove)
-    unplug_interface
-    ;;
-esac
+if . /lib/ec2net/functions; then
+  case "$ACTION" in
+    add)
+      plug_interface
+      ;;
+    remove)
+      unplug_interface
+      ;;
+  esac
+fi

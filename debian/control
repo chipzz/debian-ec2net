@@ -7,6 +7,6 @@ Build-Depends: debhelper (>= 9)
 
 Package: ec2net
 Architecture: all
-Depends: udev, isc-dhcp-client, ifupdown, bash (>= 3.0), curl
+Depends: udev, isc-dhcp-client, ifupdown, bash (>= 3.0), wget | curl
 Description: Amazon AWS EC2 network scripts
  Amazon AWS EC2 network scripts to manage ENIs

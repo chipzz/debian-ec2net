@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Copyright (C) 2012 Amazon.com, Inc. or its affiliates.
 # All Rights Reserved.
@@ -16,23 +16,18 @@
 # License.
 INTERFACE="${interface}"
 PREFIX="${new_prefix}"
-. /etc/network/ec2net-functions
 
-ec2dhcp_config() {
-  rewrite_rules
-  rewrite_aliases
-}
-
-ec2dhcp_restore() {
-  remove_aliases
-  remove_rules
-}
-
-if [ "$reason" = "RELEASE" ]; then
-ec2dhcp_restore
-logger "restore $?"
-elif [ "$reason" = "BOUND" ] || [ "$reason" = "REBOOT" ] || [ "$reason" = "RENEW" ] || [ "$reason" = "REBIND" ] ; then 
-ec2dhcp_config
-else 
-logger "No action on $reason"
+if . /lib/ec2net/functions; then
+  case "$reason" in
+    RELEASE)
+      remove_aliases
+      remove_rules
+      ;;
+    BOUND|REBOOT|RENEW|REBIND)
+      rewrite_rules
+      rewrite_aliases
+      ;;
+    *)
+      ;;
+  esac
 fi

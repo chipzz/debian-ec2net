@@ -23,68 +23,66 @@ PATH="/sbin:/usr/sbin:/bin:/usr/bin"
 export PATH
 
 # metadata query requires an interface and hardware address
-if [ -z "${INTERFACE}" ]; then
-  exit
-fi
+expr "$INTERFACE" : 'eth[0-9]\+' >/dev/null || return 1
 HWADDR=$(cat /sys/class/net/${INTERFACE}/address 2>/dev/null)
 if [ -z "${HWADDR}" ] && [ "${ACTION}" != "remove" ]; then
-  exit
+  return 1
 fi
 export HWADDR
 
 # generate a routing table number
 RTABLE=${INTERFACE#eth}
-let RTABLE+=10000
+RTABLE=$(expr $RTABLE + 10000)
 
 metadata_base="http://169.254.169.254/latest/meta-data/network/interfaces/macs"
-config_file="/etc/network/interfaces.d/${INTERFACE}.cfg"
+config_file="/etc/network/interfaces.d/${INTERFACE}"
 dhclient_file="/etc/dhcp/dhclient-${INTERFACE}.conf"
 
 # make no changes to unmanaged interfaces
 if [ -s ${config_file} ]; then
   unmanaged=$(LANG=C grep -l "^[[:space:]]*EC2SYNC=no\([[:space:]#]\|$\)" $config_file)
-  if [ "${config_file}" == "${unmanaged}" ]; then
-    exit
+  if [ $config_file = "$unmanaged" ]; then
+    return 1
   fi
 fi
 
 get_meta() {
   attempts=10
+  if which wget >/dev/null; then
+    wget --tries=$attempts -qO- ${metadata_base}/${HWADDR}/${1}
+  else
   false
   while [ "${?}" -gt 0 ]; do
     [ "${attempts}" -eq 0 ] && return
     meta=$(curl -s -f ${metadata_base}/${HWADDR}/${1})
     if [ "${?}" -gt 0 ]; then
-      let attempts--
+      attempts=$(expr $attempts - 1)
       sleep 3
       false
     fi
   done
   echo "${meta}"
+  fi
 }
 
 get_cidr() {
-  cidr=$(get_meta 'subnet-ipv4-cidr-block')
-  echo "${cidr}"
+  get_meta 'subnet-ipv4-cidr-block'
 }
 
 get_ipv4s() {
-  ipv4s=$(get_meta 'local-ipv4s')
-  echo "${ipv4s}"
+  (get_meta 'local-ipv4s'; echo) | grep .
 }
 
 get_primary_ipv4() {
-  ipv4s=($(get_ipv4s))
-  echo "${ipv4s[0]}"
+  get_ipv4s | head -n1
 }
 
 get_secondary_ipv4s() {
-  ipv4s=($(get_ipv4s))
-  echo "${ipv4s[@]:1}"
+  get_ipv4s | tail -n+2
 }
 
 remove_primary() {
-  if [ "${INTERFACE}" == "eth0" ]; then
+  if [ "$INTERFACE" = eth0 ]; then
     return
   fi
   rm -f ${config_file}
@@ -92,7 +90,7 @@ remove_primary() {
 }
 
 rewrite_primary() {
-  if [ "${INTERFACE}" == "eth0" ]; then
+  if [ "$INTERFACE" = eth0 ]; then
     return
   fi
   cidr=$(get_cidr)
@@ -104,7 +102,7 @@ rewrite_primary() {
   gateway="$(echo ${network}|cut -d. -f1-3).${router}"
   cat <<- EOF > ${config_file}
 # This file is automaticatically generated
-# See https://github.com/jessecollier/ubuntu-ec2net for source
+# See https://github.com/chipzz/debian-ec2net for source
 auto ${INTERFACE}
 iface ${INTERFACE} inet dhcp
 post-up ip route add default via ${gateway} dev ${INTERFACE} table ${RTABLE}
@@ -121,12 +119,12 @@ EOF
 }
 
 remove_aliases() {
-  /sbin/ip addr flush dev ${INTERFACE} secondary
+  ip addr flush dev ${INTERFACE} secondary
 }
 
 rewrite_aliases() {
   aliases=$(get_secondary_ipv4s)
-  if [ ${#aliases[*]} -eq 0 ]; then
+  if [ $(echo "$aliases" | wc -l) -eq 0 ]; then
     remove_aliases
     return
   fi
@@ -135,7 +133,7 @@ rewrite_aliases() {
   # correctly configure secondary addresses.
   if [ -z "${PREFIX}" ]; then
     cidr=$(get_cidr)
-    PREFIX=$(echo ${cidr}|cut -d/ -f2)
+    PREFIX=${cidr##*/}
   fi
   [ -n "${PREFIX##*[!0-9]*}" ] || return
   # Retrieve a list of secondary IP addresses on the interface.
@@ -143,41 +141,38 @@ rewrite_aliases() {
   # from metadata, cross it off the stale list if present, or
   # add it to the interface otherwise. Then, remove any address
   # remaining in the stale list.
-  declare -A secondaries
-  for secondary in $(/sbin/ip addr list dev ${INTERFACE} secondary \
+  secondaries=$(ip addr list dev ${INTERFACE} secondary \
                      |grep "inet .* secondary ${INTERFACE}" \
-                     |awk '{print $2}'|cut -d/ -f1); do
-    secondaries[${secondary}]=1
-  done
+                     |awk '{print $2}'|cut -d/ -f1)
   for alias in ${aliases}; do
-    if [[ ${secondaries[${alias}]} ]]; then
-      unset secondaries[${alias}]
+    if echo "$secondaries" | grep -F "$alias" >/dev/null; then
+      secondaries=$(echo "$secondaries" | grep -vF "$alias")
     else
-      /sbin/ip addr add ${alias}/${PREFIX} brd + dev ${INTERFACE}
+      ip addr add ${alias}/${PREFIX} brd + dev ${INTERFACE}
     fi
   done
-  for secondary in "${!secondaries[@]}"; do
-    /sbin/ip addr del ${secondary}/${PREFIX} dev ${INTERFACE}
+  for secondary in $secondaries; do
+    ip addr del ${secondary}/${PREFIX} dev ${INTERFACE}
   done
 }
 
 remove_rules() {
-  if [ "${INTERFACE}" == "eth0" ]; then
+  if [ "$INTERFACE" = eth0 ]; then
     return
   fi
-  for rule in $(/sbin/ip rule list \
+  for rule in $(ip rule list \
                 |grep "from .* lookup ${RTABLE}" \
                 |awk -F: '{print $1}'); do
-    /sbin/ip rule delete pref "${rule}"
+    ip rule delete pref "${rule}"
   done
 }
 
 rewrite_rules() {
-  if [ "${INTERFACE}" == "eth0" ]; then
+  if [ "$INTERFACE" = eth0 ]; then
     return
   fi
-  ips=($(get_ipv4s))
-  if [ ${#ips[*]} -eq 0 ]; then
+  ips=$(get_ipv4s)
+  if [ $(echo "$ips" | wc -l) -eq 0 ]; then
     remove_rules
     return
   fi
@@ -187,27 +182,26 @@ rewrite_rules() {
   # off the stale list if present. Otherwise, add a rule sending
   # outbound traffic from that IP to the interface route table.
   # Then, remove all other rules found in the stale list.
-  declare -A rules
-  for rule in $(/sbin/ip rule list \
+  for rule in $(ip rule list \
                 |grep "from .* lookup ${RTABLE}" \
                 |awk '{print $1$3}'); do
-    split=(${rule//:/ })
-    rules[${split[1]}]=${split[0]}
+    eval "rule_${rule%%:*}=${rule##*:}"
   done
-  for ip in ${ips[@]}; do
-    if [[ ${rules[${ip}]} ]]; then
-      unset rules[${ip}]
+  for ip in $ips; do
+    v=$(set | sed -n 's/^\(rule_[0-9]\+\)='"'\\?"$(echo "$ip" | sed 's/\./\\./g')"'"'\?$/\1/p')
+    if [ "$v" ]; then
+      unset $v
     else
-      /sbin/ip rule add from ${ip} lookup ${RTABLE}
+      ip rule add from ${ip} lookup ${RTABLE}
     fi
   done
-  for rule in "${!rules[@]}"; do
-    /sbin/ip rule delete pref "${rules[${rule}]}"
+  for pref in $(set | sed -n 's/^rule_\([0-9]\+\)='"'"'\?[0-9.]\+'"'"'\?$/\1/p'); do
+    ip rule delete pref $pref
+    unset rule_$pref
   done
 }
 
 plug_interface() {
-    logger "ABOUT TO CALL REWRITE PRIMARY"
   rewrite_primary
 }
 
@@ -218,9 +212,11 @@ unplug_interface() {
 }
 
 activate_primary() {
-  /sbin/ifup ${INTERFACE}
+  ifup ${INTERFACE}
 }
 
 deactivate_primary() {
-  /sbin/ifdown ${INTERFACE}
+  ifdown ${INTERFACE}
 }
+
+:
